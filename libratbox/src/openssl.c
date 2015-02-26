@@ -355,7 +355,7 @@ rb_init_ssl(void)
 
 
 int
-rb_setup_ssl_server(const char *cert, const char *keyfile, const char *dhfile)
+rb_setup_ssl_server(const char *cert, const char *keyfile, const char *dhfile, const char *cipher_list)
 {
 	DH *dh;
 	unsigned long err;
@@ -377,7 +377,6 @@ rb_setup_ssl_server(const char *cert, const char *keyfile, const char *dhfile)
 		rb_lib_log("rb_setup_ssl_server: No key file");
 		return 0;
 	}
-
 
 	if(!SSL_CTX_use_PrivateKey_file(ssl_server_ctx, keyfile, SSL_FILETYPE_PEM) || !SSL_CTX_use_PrivateKey_file(ssl_client_ctx, keyfile, SSL_FILETYPE_PEM))
 	{
@@ -413,6 +412,12 @@ rb_setup_ssl_server(const char *cert, const char *keyfile, const char *dhfile)
 				   dhfile, get_ssl_error(err));
 		}
 	}
+
+	if(cipher_list != NULL)
+	{
+		SSL_CTX_set_cipher_list(ssl_server_ctx, cipher_list);
+	}
+
 	return 1;
 }
 

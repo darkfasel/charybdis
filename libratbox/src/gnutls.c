@@ -327,7 +327,7 @@ rb_load_file_into_datum_t(const char *file)
 }
 
 int
-rb_setup_ssl_server(const char *cert, const char *keyfile, const char *dhfile)
+rb_setup_ssl_server(const char *cert, const char *keyfile, const char *dhfile, const char *cipher_list)
 {
 	int ret;
 	gnutls_datum_t *d_cert, *d_key;
@@ -401,6 +401,12 @@ rb_setup_ssl_server(const char *cert, const char *keyfile, const char *dhfile)
 		}
 		else
 			rb_lib_log("rb_setup_ssl_server: Unable to setup DH parameters");
+	}
+
+	if(cipher_list != NULL)
+	{
+		/* XXX: use gnutls_priority_set_direct() somehow */
+		rb_lib_log("rb_setup_ssl_server: SSL cipher lists are not currently supported with GnuTLS");
 	}
 	return 1;
 }
