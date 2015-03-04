@@ -34,12 +34,15 @@
 #loadmodule "extensions/no_kill_services.so";
 
 /*
+ * For more privacy use ip_cloaking_darklink.so.
+ *
  * IP cloaking extensions: use ip_cloaking_4.0
  * if you're linking 3.2 and later, otherwise use
  * ip_cloaking.so, for compatibility with older 3.x
  * releases.
  */
 
+#loadmodule "extensions/ip_cloaking_darkfasel.so";
 #loadmodule "extensions/ip_cloaking_4.0.so";
 #loadmodule "extensions/ip_cloaking.so";
 
@@ -453,7 +456,7 @@ general {
 
 	/*
 	 * default_umodes: umodes to enable on connect.
-	 * If you have enabled the new ip_cloaking_4.0 module, and you want
+	 * If you have enabled the new ip_cloaking_darkfasel module, and you want
 	 * to make use of it, add +x to this option, i.e.:
 	 *      default_umodes = "+ix";
 	 *
