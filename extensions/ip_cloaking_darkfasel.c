@@ -80,7 +80,7 @@ do_address_cloak(const char *inbuf, char *outbuf)
   char algorithm[4] = "$6$";
 
   /* key */
-  char *key = "%fn0rd$m0m0+fp";
+  char *key = "fnord";
 
   char salt[64];
   sprintf(salt, "%s%s", algorithm, key);
