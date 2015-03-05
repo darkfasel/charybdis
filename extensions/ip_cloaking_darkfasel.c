@@ -80,7 +80,7 @@ do_address_cloak(const char *inbuf, char *outbuf)
   char algorithm[4] = "$6$";
 
   /* key */
-  char *key = "fnord";
+  char *key = "%fn0rd$m0m0+fp";
 
   char salt[64];
   sprintf(salt, "%s%s", algorithm, key);
@@ -119,8 +119,8 @@ do_address_cloak(const char *inbuf, char *outbuf)
   }
 
   /* hide characters */
-  hash[strlen(hash)-44] = '\0';
-  hash = hash + 8;
+  hash[strlen(hash)-17] = '\0';
+  hash = hash + 46;
 
   /* beam me up */
   rb_strlcpy(outbuf, hash, HOSTLEN + 1);
@@ -151,7 +151,6 @@ check_umode_change(void *vdata)
 			distribute_hostchange(source_p, source_p->localClient->mangledhost);
 		}
 		else /* not really nice, but we need to send this numeric here */
-      do_address_cloak(source_p->orighost, source_p->localClient->mangledhost);
 			sendto_one_numeric(source_p, RPL_HOSTHIDDEN, "%s :is now your hidden host",
 				source_p->host);
 	}
@@ -169,14 +168,13 @@ static void
 check_new_user(void *vdata)
 {
 	struct Client *source_p = (void *)vdata;
-
 	if (IsIPSpoof(source_p))
 	{
 		source_p->umodes &= ~user_modes['x'];
 		return;
 	}
 	source_p->localClient->mangledhost = rb_malloc(HOSTLEN + 1);
-  do_address_cloak(source_p->orighost, source_p->localClient->mangledhost);
+	do_address_cloak(source_p->orighost, source_p->localClient->mangledhost);
 	if (IsDynSpoof(source_p))
 		source_p->umodes &= ~user_modes['x'];
 	if (source_p->umodes & user_modes['x'])
