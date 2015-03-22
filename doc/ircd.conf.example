@@ -34,7 +34,7 @@
 #loadmodule "extensions/no_kill_services.so";
 
 /*
- * For more privacy use ip_cloaking_darklink.so.
+ * For more privacy use ip_cloaking_darkfasel.so.
  *
  * IP cloaking extensions: use ip_cloaking_4.0
  * if you're linking 3.2 and later, otherwise use
@@ -456,6 +456,14 @@ alias "MS" {
 general {
 	hide_error_messages = opers;
 	hide_spoof_ips = yes;
+
+	/* default_darkfasel_salt: secret salt key
+	 * If ip_cloaking_darkfasel is enabled.
+	 * Default is "fnord" for pseudo randomness. Pseudo randomness is generated
+	 * by every client connect in base63+<dot>/printable characters with time,
+	 * pid and the default value.
+	 */
+	default_darkfasel_salt = "fnord";
 
 	/*
 	 * default_umodes: umodes to enable on connect.

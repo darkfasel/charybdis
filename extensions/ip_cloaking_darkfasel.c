@@ -46,7 +46,7 @@ mapi_hfn_list_av1 ip_cloaking_darkfasel_hfnlist[] = {
 };
 
 DECLARE_MODULE_AV1(ip_cloaking_darkfasel, _modinit, _moddeinit, NULL, NULL,
-			ip_cloaking_darkfasel_hfnlist, "$Revision: 0042 $");
+			ip_cloaking_darkfasel_hfnlist, "$Revision: 0043 $");
 
 static void
 distribute_hostchange(struct Client *client_p, char *newhost)
@@ -76,54 +76,54 @@ distribute_hostchange(struct Client *client_p, char *newhost)
 static void
 do_address_cloak(const char *inbuf, char *outbuf)
 {
-  /* sha512 */
-  char algorithm[4] = "$6$";
+	/* sha512 */
+	char algorithm[4] = "$6$";
 
-  /* key */
-  char *key = "fnord";
+	/* key */
+	char *key = ConfigFileEntry.default_darkfasel_salt;
 
-  char salt[64];
-  sprintf(salt, "%s%s", algorithm, key);
+	char salt[64];
+	sprintf(salt, "%s%s", algorithm, key);
 
-  /* check default value */
-  if (!strcmp(key, "fnord"))
-  {
+	/* check default value */
+	if (!strcmp(key, "fnord"))
+	{
 
-    /* seed chars */
-    const char *const chars =
-      "0123456789ABCDEFGHIJKLMNOPQRSTUV"
-      "WXYZabcdefghijklmnopqrstuvwxyz/.";
+		/* seed chars */
+		const char *const chars =
+			"0123456789ABCDEFGHIJKLMNOPQRSTUV"
+			"WXYZabcdefghijklmnopqrstuvwxyz/.";
 
-    /* not very random seed */
-    unsigned long seed[2];
-    seed[0] = time(NULL);
-    seed[1] = getpid() ^ (seed[0] >> 14 & 0x30000);
+		/* not very random seed */
+		unsigned long seed[2];
+		seed[0] = time(NULL);
+		seed[1] = getpid() ^ (seed[0] >> 14 & 0x30000);
 
-    /* printable characters */
-    int salt_i;
-    for (salt_i = 0; salt_i < 5; salt_i++)
-      salt[3+salt_i] = chars[(seed[salt_i/5] >> (salt_i%5)*6) & 0x3f];
-  }
+		/* printable characters */
+		int salt_i;
+		for (salt_i = 0; salt_i < 5; salt_i++)
+			salt[3+salt_i] = chars[(seed[salt_i/5] >> (salt_i%5)*6) & 0x3f];
+	}
 
-  /* encrypt */
-  char *hash = rb_crypt(inbuf, salt);
+	/* encrypt */
+	char *hash = rb_crypt(inbuf, salt);
 
-  /* replace not usable characters */
-  int replace_i;
-  for (replace_i=0; hash[replace_i]!= '\0'; replace_i++) {
+	/* replace not usable characters */
+	int replace_i;
+	for (replace_i=0; hash[replace_i]!= '\0'; replace_i++) {
 
-    if ((hash[replace_i]=='/') || (hash[replace_i]=='$')) {
+		if ((hash[replace_i]=='/') || (hash[replace_i]=='$')) {
 
-      hash[replace_i] = '.';
-    }
-  }
+		hash[replace_i] = '.';
+		}
+	}
 
-  /* hide characters */
-  hash[strlen(hash)-17] = '\0';
-  hash = hash + 46;
+	/* hide characters */
+	hash[strlen(hash)-17] = '\0';
+	hash = hash + 46;
 
-  /* beam me up */
-  rb_strlcpy(outbuf, hash, HOSTLEN + 1);
+	/* beam me up */
+	rb_strlcpy(outbuf, hash, HOSTLEN + 1);
 }
 
 static void
