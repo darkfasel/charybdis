@@ -174,7 +174,10 @@ check_new_user(void *vdata)
 		return;
 	}
 	source_p->localClient->mangledhost = rb_malloc(HOSTLEN + 1);
-	do_address_cloak(source_p->orighost, source_p->localClient->mangledhost);
+	if(source_p->certfp != NULL)
+		rb_strlcpy(source_p->localClient->mangledhost, source_p->certfp, HOSTLEN + 1);
+	else
+		do_address_cloak(source_p->orighost, source_p->localClient->mangledhost);
 	if (IsDynSpoof(source_p))
 		source_p->umodes &= ~user_modes['x'];
 	if (source_p->umodes & user_modes['x'])
