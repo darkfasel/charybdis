@@ -412,7 +412,8 @@ stats_deny (struct Client *source_p)
 static void
 stats_exempt(struct Client *source_p)
 {
-	char *name, *host, *pass, *user, *classname;
+	char *name, *host, *user, *classname;
+	const char *pass;
 	struct AddressRec *arec;
 	struct ConfItem *aconf;
 	int i, port;
@@ -523,7 +524,8 @@ stats_auth (struct Client *source_p)
 	else if((ConfigFileEntry.stats_i_oper_only == 1) && !IsOper (source_p))
 	{
 		struct ConfItem *aconf;
-		char *name, *host, *pass = "*", *user, *classname;
+		char *name, *host, *user, *classname;
+		const char *pass = "*";
 		int port;
 
 		if(MyConnect (source_p))
@@ -612,6 +614,43 @@ stats_tklines(struct Client *source_p)
 				sendto_one_numeric(source_p, RPL_STATSKLINE,
 						   form_str(RPL_STATSKLINE),
 						   'k', host, user, pass,
+						   oper_reason ? "|" : "",
+						   oper_reason ? oper_reason : "");
+			}
+		}
+	}
+}
+
+/* report_Klines()
+ *
+ * inputs       - Client to report to, mask
+ * outputs      -
+ * side effects - Reports configured K-lines to client_p.
+ */
+static void
+report_Klines(struct Client *source_p)
+{
+	char *host, *pass, *user, *oper_reason;
+	struct AddressRec *arec;
+	struct ConfItem *aconf = NULL;
+	int i;
+
+	for (i = 0; i < ATABLE_SIZE; i++)
+	{
+		for (arec = atable[i]; arec; arec = arec->next)
+		{
+			if(arec->type == CONF_KILL)
+			{
+				aconf = arec->aconf;
+
+				/* its a tempkline, theyre reported elsewhere */
+				if(aconf->flags & CONF_FLAGS_TEMPORARY)
+					continue;
+
+				get_printable_kline(source_p, aconf, &host, &pass, &user, &oper_reason);
+				sendto_one_numeric(source_p, RPL_STATSKLINE,
+						   form_str(RPL_STATSKLINE),
+						   'K', host, user, pass,
 						   oper_reason ? "|" : "",
 						   oper_reason ? oper_reason : "");
 			}

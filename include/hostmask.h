@@ -36,7 +36,7 @@ enum
 #endif
 };
 
-int parse_netmask(const char *, struct sockaddr *, int *);
+int parse_netmask(const char *, struct rb_sockaddr_storage *, int *);
 struct ConfItem *find_conf_by_address(const char *host, const char *sockhost,
 				      const char *orighost, struct sockaddr *,
 				      int, int, const char *, const char *);
@@ -58,7 +58,6 @@ struct ConfItem *find_dline(struct sockaddr *, int);
 			 (struct sockaddr *)&(x)->localClient->ip, CONF_KILL,\
 			 (x)->localClient->ip.ss_family, (x)->username, NULL))
 
-void report_Klines(struct Client *);
 void report_auth(struct Client *);
 #ifdef RB_IPV6
 int match_ipv6(struct sockaddr *, struct sockaddr *, int);

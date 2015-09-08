@@ -75,7 +75,7 @@ rb_dlink_list service_list;
 /* internally defined functions */
 static void set_default_conf(void);
 static void validate_conf(void);
-static void read_conf(FILE *);
+static void read_conf(void);
 static void clear_out_old_conf(void);
 
 static void expire_prop_bans(void *list);
@@ -674,7 +674,6 @@ set_default_conf(void)
 	/* ServerInfo.name = ServerInfo.name; */
 	ServerInfo.description = NULL;
 	ServerInfo.network_name = NULL;
-	ServerInfo.network_desc = NULL;
 
 	memset(&ServerInfo.ip, 0, sizeof(ServerInfo.ip));
 	ServerInfo.specific_ipv4_vhost = 0;
@@ -820,12 +819,12 @@ set_default_conf(void)
  * read_conf()
  *
  *
- * inputs       - file descriptor pointing to config file to use
+ * inputs       - None
  * output       - None
  * side effects	- Read configuration file.
  */
 static void
-read_conf(FILE * file)
+read_conf(void)
 {
 	lineno = 0;
 
@@ -852,9 +851,6 @@ validate_conf(void)
 
 	if(ServerInfo.network_name == NULL)
 		ServerInfo.network_name = rb_strdup(NETWORK_NAME_DEFAULT);
-
-	if(ServerInfo.network_desc == NULL)
-		ServerInfo.network_desc = rb_strdup(NETWORK_DESC_DEFAULT);
 
 	if(ServerInfo.ssld_count < 1)
 		ServerInfo.ssld_count = 1;
@@ -1284,7 +1280,7 @@ get_oper_name(struct Client *client_p)
  */
 void
 get_printable_conf(struct ConfItem *aconf, char **name, char **host,
-		   char **pass, char **user, int *port, char **classname)
+		   const char **pass, char **user, int *port, char **classname)
 {
 	static char null[] = "<NULL>";
 	static char zero[] = "default";
@@ -1403,7 +1399,7 @@ read_conf_files(int cold)
 	}
 
 	call_hook(h_conf_read_start, NULL);
-	read_conf(conf_fbfile_in);
+	read_conf();
 	call_hook(h_conf_read_end, NULL);
 
 	fclose(conf_fbfile_in);
@@ -1461,8 +1457,6 @@ clear_out_old_conf(void)
 	ServerInfo.description = NULL;
 	rb_free(ServerInfo.network_name);
 	ServerInfo.network_name = NULL;
-	rb_free(ServerInfo.network_desc);
-	ServerInfo.network_desc = NULL;
 
 	ServerInfo.ssld_count = 1;
 
