@@ -693,7 +693,7 @@ set_default_conf(void)
 	ConfigFileEntry.servicestring = NULL;
 	ConfigFileEntry.sasl_service = NULL;
 
-	ConfigFileEntry.default_darkfasel_salt = rb_strdup("fnord");
+	ConfigFileEntry.anonymous_cloak = rb_strdup("users.darkfasel.net");
 	ConfigFileEntry.default_umodes = UMODE_INVISIBLE;
 	ConfigFileEntry.failed_oper_notice = YES;
 	ConfigFileEntry.anti_nick_flood = NO;
