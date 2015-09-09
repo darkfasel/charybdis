@@ -115,7 +115,6 @@ static void
 check_new_user(void *vdata)
 {
 	struct Client *source_p = (void *)vdata;
-	char *key;
 	if (IsIPSpoof(source_p))
 	{
 		source_p->umodes &= ~user_modes['x'];
