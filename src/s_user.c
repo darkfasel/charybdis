@@ -219,7 +219,7 @@ show_lusers(struct Client *source_p)
 */
 
 int
-register_local_user(struct Client *client_p, struct Client *source_p, const char *username)
+register_local_user(struct Client *client_p, struct Client *source_p)
 {
 	struct ConfItem *aconf, *xconf;
 	struct User *user = source_p->user;
@@ -230,7 +230,6 @@ register_local_user(struct Client *client_p, struct Client *source_p, const char
 
 	s_assert(NULL != source_p);
 	s_assert(MyConnect(source_p));
-	s_assert(source_p->username != username);
 
 	if(source_p == NULL)
 		return -1;
@@ -265,12 +264,12 @@ register_local_user(struct Client *client_p, struct Client *source_p, const char
 	client_p->localClient->last = rb_current_time();
 
 	/* XXX - fixme. we shouldnt have to build a users buffer twice.. */
-	if(!IsGotId(source_p) && (strchr(username, '[') != NULL))
+	if(!IsGotId(source_p) && (strchr(source_p->username, '[') != NULL))
 	{
 		const char *p;
 		int i = 0;
 
-		p = username;
+		p = source_p->username;
 
 		while(*p && i < USERLEN)
 		{
@@ -280,10 +279,11 @@ register_local_user(struct Client *client_p, struct Client *source_p, const char
 		}
 
 		myusername[i] = '\0';
-		username = myusername;
 	}
+	else
+		rb_strlcpy(myusername, source_p->username, sizeof myusername);
 
-	if((status = check_client(client_p, source_p, username)) < 0)
+	if((status = check_client(client_p, source_p, myusername)) < 0)
 		return (CLIENT_EXITED);
 
 	/* Apply nick override */
@@ -339,7 +339,7 @@ register_local_user(struct Client *client_p, struct Client *source_p, const char
 		/* dont replace username if its supposed to be spoofed --fl */
 		if(!IsConfDoSpoofIp(aconf) || !strchr(aconf->info.name, '@'))
 		{
-			p = username;
+			p = myusername;
 
 			if(!IsNoTilde(aconf))
 				source_p->username[i++] = '~';
@@ -1475,7 +1475,7 @@ change_nick_user_host(struct Client *target_p,	const char *nick, const char *use
 		/* Resend away message to away-notify enabled clients. */
 		if (target_p->user->away)
 			sendto_common_channels_local_butone(target_p, CLICAP_AWAY_NOTIFY, ":%s!%s@%s AWAY :%s",
-							    target_p->name, target_p->username, target_p->host,
+							    nick, user, host,
 							    target_p->user->away);
 
 		if(MyClient(target_p) && changed_case)
