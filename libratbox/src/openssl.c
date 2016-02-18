@@ -455,7 +455,7 @@ rb_setup_ssl_server(const char *cert, const char *keyfile, const char *dhfile, c
 		}
 	}
 
-	if(cipher_list != NULL)
+	if (cipher_list != NULL)
 	{
 		SSL_CTX_set_cipher_list(ssl_server_ctx, cipher_list);
 	}
@@ -686,7 +686,7 @@ rb_get_ssl_strerror(rb_fde_t *F)
 }
 
 int
-rb_get_ssl_certfp(rb_fde_t *F, uint8_t certfp[RB_SSL_CERTFP_LEN])
+rb_get_ssl_certfp(rb_fde_t *F, uint8_t certfp[RB_SSL_CERTFP_LEN], int method)
 {
 	X509 *cert;
 	int res;
@@ -705,10 +705,30 @@ rb_get_ssl_certfp(rb_fde_t *F, uint8_t certfp[RB_SSL_CERTFP_LEN])
 			res == X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT ||
 			res == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY)
 		{
-			unsigned int certfp_length = RB_SSL_CERTFP_LEN;
-			X509_digest(cert, EVP_sha1(), certfp, &certfp_length);
+			const EVP_MD *evp;
+			unsigned int len;
+
+			switch(method)
+			{
+			case RB_SSL_CERTFP_METH_SHA1:
+				evp = EVP_sha1();
+				len = RB_SSL_CERTFP_LEN_SHA1;
+				break;
+			case RB_SSL_CERTFP_METH_SHA256:
+				evp = EVP_sha256();
+				len = RB_SSL_CERTFP_LEN_SHA256;
+				break;
+			case RB_SSL_CERTFP_METH_SHA512:
+				evp = EVP_sha512();
+				len = RB_SSL_CERTFP_LEN_SHA512;
+				break;
+			default:
+				return 0;
+			}
+
+			X509_digest(cert, evp, certfp, &len);
 			X509_free(cert);
-			return 1;
+			return len;
 		}
 		X509_free(cert);
 	}
@@ -730,5 +750,18 @@ rb_get_ssl_info(char *buf, size_t len)
 		    (long)OPENSSL_VERSION_NUMBER, SSLeay());
 }
 
+const char *
+rb_ssl_get_cipher(rb_fde_t *F)
+{
+	const SSL_CIPHER *sslciph;
+
+	if(F == NULL || F->ssl == NULL)
+		return NULL;
+
+	if((sslciph = SSL_get_current_cipher(F->ssl)) == NULL)
+		return NULL;
+
+	return SSL_CIPHER_get_name(sslciph);
+}
 
 #endif /* HAVE_OPESSL */

@@ -228,6 +228,7 @@ struct LocalUser
 	char *opername; /* name of operator{} block being used or tried (challenge) */
 	char *challenge;
 	char *fullcaps;
+	char *cipher_string;
 
 	int caps;		/* capabilities bit-field */
 	rb_fde_t *F;		/* >= 0, for local clients */
@@ -239,6 +240,7 @@ struct LocalUser
 
 	time_t next_away;	/* Don't allow next away before... */
 	time_t last;
+	uint32_t connid;
 
 	/* clients allowed to talk through +g */
 	rb_dlink_list allow_list;
@@ -277,6 +279,7 @@ struct LocalUser
 
 	struct _ssl_ctl *ssl_ctl;		/* which ssl daemon we're associate with */
 	struct _ssl_ctl *z_ctl;			/* second ctl for ssl+zlib */
+	uint32_t zconnid;
 	uint32_t localflags;
 	struct ZipStats *zipstats;		/* zipstats */
 	uint16_t cork_count;			/* used for corking/uncorking connections */
@@ -450,6 +453,7 @@ struct ListClient
 #define CLICAP_TLS			0x0020
 #define CLICAP_USERHOST_IN_NAMES	0x0040
 #define CLICAP_CAP_NOTIFY		0x0080
+#define CLICAP_CHGHOST			0x0100
 
 /*
  * flags macros.
@@ -587,6 +591,8 @@ extern void error_exit_client(struct Client *, int);
 
 extern void count_local_client_memory(size_t * count, size_t * memory);
 extern void count_remote_client_memory(size_t * count, size_t * memory);
+
+extern int clean_nick(const char *, int loc_client);
 
 extern struct Client *find_chasing(struct Client *, const char *, int *);
 extern struct Client *find_person(const char *);

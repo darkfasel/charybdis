@@ -46,12 +46,14 @@ SRCS =                          \
   extb_account.c		\
   extb_canjoin.c		\
   extb_channel.c		\
+  extb_hostmask.c		\
   extb_oper.c			\
   extb_server.c			\
   extb_ssl.c			\
   extb_realname.c		\
   extb_usermode.c		\
   extb_extgecos.c		\
+  extb_combi.c			\
   force_user_invis.c		\
   hurt.c			\
   ip_cloaking.c			\
@@ -78,6 +80,7 @@ SRCS =                          \
   m_webirc.c			\
   m_remove.c			\
   m_roleplay.c			\
+  hide_uncommon_channels.c	\
   no_kill_services.c		\
   no_locops.c			\
   no_oper_invis.c		\

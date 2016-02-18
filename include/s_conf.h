@@ -236,6 +236,7 @@ struct config_file_entry
 	int client_flood_message_num;
 
 	unsigned int nicklen;
+	int certfp_method;
 };
 
 struct config_channel_entry
@@ -259,6 +260,8 @@ struct config_channel_entry
 	int resv_forcepart;
 	int channel_target_change;
 	int disable_local_channels;
+	unsigned int autochanmodes;
+	int displayed_usercount;
 };
 
 struct config_server_hide

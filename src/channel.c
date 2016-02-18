@@ -671,8 +671,18 @@ int
 is_banned(struct Channel *chptr, struct Client *who, struct membership *msptr,
 	  const char *s, const char *s2, const char **forward)
 {
-	return is_banned_list(chptr, &chptr->banlist, who, msptr, s, s2,
-			forward);
+	if (chptr->last_checked_client != NULL &&
+		who == chptr->last_checked_client &&
+		chptr->last_checked_type == CHFL_BAN &&
+		chptr->last_checked_ts > chptr->bants)
+		return chptr->last_checked_result;
+
+	chptr->last_checked_client = who;
+	chptr->last_checked_type = CHFL_BAN;
+	chptr->last_checked_result = is_banned_list(chptr, &chptr->banlist, who, msptr, s, s2, forward);
+	chptr->last_checked_ts = rb_current_time();
+
+	return chptr->last_checked_result;
 }
 
 /* is_quieted()
@@ -686,8 +696,18 @@ int
 is_quieted(struct Channel *chptr, struct Client *who, struct membership *msptr,
 	   const char *s, const char *s2)
 {
-	return is_banned_list(chptr, &chptr->quietlist, who, msptr, s, s2,
-			NULL);
+	if (chptr->last_checked_client != NULL &&
+		who == chptr->last_checked_client &&
+		chptr->last_checked_type == CHFL_QUIET &&
+		chptr->last_checked_ts > chptr->bants)
+		return chptr->last_checked_result;
+
+	chptr->last_checked_client = who;
+	chptr->last_checked_type = CHFL_QUIET;
+	chptr->last_checked_result = is_banned_list(chptr, &chptr->quietlist, who, msptr, s, s2, NULL);
+	chptr->last_checked_ts = rb_current_time();
+
+	return chptr->last_checked_result;
 }
 
 /* can_join()
@@ -821,6 +841,7 @@ can_send(struct Channel *chptr, struct Client *source_p, struct membership *mspt
 	hook_data_channel_approval moduledata;
 
 	moduledata.approved = CAN_SEND_NONOP;
+	moduledata.dir = MODE_QUERY;
 
 	if(IsServer(source_p) || IsService(source_p))
 		return CAN_SEND_OPV;
@@ -871,6 +892,7 @@ can_send(struct Channel *chptr, struct Client *source_p, struct membership *mspt
 	moduledata.chptr = msptr->chptr;
 	moduledata.msptr = msptr;
 	moduledata.target = NULL;
+	moduledata.dir = (moduledata.approved == CAN_SEND_NO) ? MODE_ADD : MODE_QUERY;
 
 	call_hook(h_can_send, &moduledata);
 

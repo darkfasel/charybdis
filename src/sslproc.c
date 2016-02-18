@@ -73,20 +73,21 @@ static void send_new_ssl_certs_one(ssl_ctl_t * ctl, const char *ssl_cert,
 				   const char *ssl_private_key, const char *ssl_dh_params,
 				   const char *ssl_cipher_list);
 static void send_init_prng(ssl_ctl_t * ctl, prng_seed_t seedtype, const char *path);
+static void send_certfp_method(ssl_ctl_t *ctl, int method);
 
 
 static rb_dlink_list ssl_daemons;
 
-static inline int32_t
-buf_to_int32(char *buf)
+static inline uint32_t
+buf_to_uint32(char *buf)
 {
-	int32_t x;
+	uint32_t x;
 	memcpy(&x, buf, sizeof(x));
 	return x;
 }
 
 static inline void
-int32_to_buf(char *buf, int32_t x)
+uint32_to_buf(char *buf, uint32_t x)
 {
 	memcpy(buf, &x, sizeof(x));
 	return;
@@ -307,11 +308,15 @@ start_ssldaemon(int count, const char *ssl_cert, const char *ssl_private_key, co
 		rb_close(P1);
 		ctl = allocate_ssl_daemon(F1, P2, pid);
 		if(ssl_ok)
+		{
 			send_init_prng(ctl, RB_PRNG_DEFAULT, NULL);
-		if(ssl_ok && ssl_cert != NULL && ssl_private_key != NULL)
-			send_new_ssl_certs_one(ctl, ssl_cert, ssl_private_key,
-					       ssl_dh_params != NULL ? ssl_dh_params : "",
-					       ssl_cipher_list != NULL ? ssl_cipher_list : "");
+			send_certfp_method(ctl, ConfigFileEntry.certfp_method);
+
+			if(ssl_cert != NULL && ssl_private_key != NULL)
+				send_new_ssl_certs_one(ctl, ssl_cert, ssl_private_key,
+						       ssl_dh_params != NULL ? ssl_dh_params : "",
+						       ssl_cipher_list != NULL ? ssl_cipher_list : "");
+		}
 		ssl_read_ctl(ctl->F, ctl);
 		ssl_do_pipe(P2, ctl);
 
@@ -355,14 +360,14 @@ ssl_process_dead_fd(ssl_ctl_t * ctl, ssl_ctl_buf_t * ctl_buf)
 {
 	struct Client *client_p;
 	char reason[256];
-	int32_t fd;
+	uint32_t fd;
 
 	if(ctl_buf->buflen < 6)
 		return;		/* bogus message..drop it.. XXX should warn here */
 
-	fd = buf_to_int32(&ctl_buf->buf[1]);
+	fd = buf_to_uint32(&ctl_buf->buf[1]);
 	rb_strlcpy(reason, &ctl_buf->buf[5], sizeof(reason));
-	client_p = find_cli_fd_hash(fd);
+	client_p = find_cli_connid_hash(fd);
 	if(client_p == NULL)
 		return;
 	if(IsAnyServer(client_p) || IsRegistered(client_p))
@@ -381,26 +386,54 @@ ssl_process_dead_fd(ssl_ctl_t * ctl, ssl_ctl_buf_t * ctl_buf)
 	exit_client(client_p, client_p, &me, reason);
 }
 
+
+static void
+ssl_process_cipher_string(ssl_ctl_t *ctl, ssl_ctl_buf_t *ctl_buf)
+{
+	struct Client *client_p;
+	const char *cstring;
+	uint32_t fd;
+
+	if(ctl_buf->buflen < 6)
+		return;         /* bogus message..drop it.. XXX should warn here */
+
+	fd = buf_to_uint32(&ctl_buf->buf[1]);
+	cstring = (const char *)&ctl_buf->buf[5];
+
+	if(EmptyString(cstring))
+		return;
+
+	client_p = find_cli_connid_hash(fd);
+	if(client_p != NULL && client_p->localClient != NULL)
+	{
+		rb_free(client_p->localClient->cipher_string);
+		client_p->localClient->cipher_string = rb_strdup(cstring);
+	}
+}
+
+
 static void
 ssl_process_certfp(ssl_ctl_t * ctl, ssl_ctl_buf_t * ctl_buf)
 {
 	struct Client *client_p;
-	int32_t fd;
+	uint32_t fd;
+	uint32_t len;
 	uint8_t *certfp;
 	char *certfp_string;
 	int i;
 
-	if(ctl_buf->buflen != 5 + RB_SSL_CERTFP_LEN)
+	if(ctl_buf->buflen > 5 + RB_SSL_CERTFP_LEN)
 		return;		/* bogus message..drop it.. XXX should warn here */
 
-	fd = buf_to_int32(&ctl_buf->buf[1]);
-	certfp = (uint8_t *)&ctl_buf->buf[5];
-	client_p = find_cli_fd_hash(fd);
+	fd = buf_to_uint32(&ctl_buf->buf[1]);
+	len = buf_to_uint32(&ctl_buf->buf[5]);
+	certfp = (uint8_t *)&ctl_buf->buf[9];
+	client_p = find_cli_connid_hash(fd);
 	if(client_p == NULL)
 		return;
 	rb_free(client_p->certfp);
-	certfp_string = rb_malloc(RB_SSL_CERTFP_LEN * 2 + 1);
-	for(i = 0; i < RB_SSL_CERTFP_LEN; i++)
+	certfp_string = rb_malloc(len * 2 + 1);
+	for(i = 0; i < len; i++)
 		rb_snprintf(certfp_string + 2 * i, 3, "%02x",
 				certfp[i]);
 	client_p->certfp = certfp_string;
@@ -425,6 +458,9 @@ ssl_process_cmd_recv(ssl_ctl_t * ctl)
 			break;
 		case 'D':
 			ssl_process_dead_fd(ctl, ctl_buf);
+			break;
+		case 'C':
+			ssl_process_cipher_string(ctl, ctl_buf);
 			break;
 		case 'F':
 			ssl_process_certfp(ctl, ctl_buf);
@@ -595,7 +631,8 @@ send_new_ssl_certs_one(ssl_ctl_t * ctl, const char *ssl_cert, const char *ssl_pr
 		return;
 	}
 	len = rb_snprintf(tmpbuf, sizeof(tmpbuf), "K%c%s%c%s%c%s%c%s%c", nul, ssl_cert, nul,
-			  ssl_private_key, nul, ssl_dh_params, nul, ssl_cipher_list, nul);
+			  ssl_private_key, nul, ssl_dh_params, nul,
+			  ssl_cipher_list != NULL ? ssl_cipher_list : "", nul);
 	ssl_cmd_write_queue(ctl, NULL, 0, tmpbuf, len);
 }
 
@@ -627,6 +664,16 @@ send_init_prng(ssl_ctl_t * ctl, prng_seed_t seedtype, const char *path)
 	ssl_cmd_write_queue(ctl, NULL, 0, tmpbuf, len);
 }
 
+static void
+send_certfp_method(ssl_ctl_t *ctl, int method)
+{
+	char buf[5];
+
+	buf[0] = 'F';
+	uint32_to_buf(&buf[1], method);
+	ssl_cmd_write_queue(ctl, NULL, 0, buf, sizeof(buf));
+}
+
 void
 send_new_ssl_certs(const char *ssl_cert, const char *ssl_private_key, const char *ssl_dh_params, const char *ssl_cipher_list)
 {
@@ -645,7 +692,7 @@ send_new_ssl_certs(const char *ssl_cert, const char *ssl_private_key, const char
 
 
 ssl_ctl_t *
-start_ssld_accept(rb_fde_t * sslF, rb_fde_t * plainF, int32_t id)
+start_ssld_accept(rb_fde_t * sslF, rb_fde_t * plainF, uint32_t id)
 {
 	rb_fde_t *F[2];
 	ssl_ctl_t *ctl;
@@ -654,7 +701,7 @@ start_ssld_accept(rb_fde_t * sslF, rb_fde_t * plainF, int32_t id)
 	F[1] = plainF;
 
 	buf[0] = 'A';
-	int32_to_buf(&buf[1], id);
+	uint32_to_buf(&buf[1], id);
 	ctl = which_ssld();
 	ctl->cli_count++;
 	ssl_cmd_write_queue(ctl, F, 2, buf, sizeof(buf));
@@ -662,7 +709,7 @@ start_ssld_accept(rb_fde_t * sslF, rb_fde_t * plainF, int32_t id)
 }
 
 ssl_ctl_t *
-start_ssld_connect(rb_fde_t * sslF, rb_fde_t * plainF, int32_t id)
+start_ssld_connect(rb_fde_t * sslF, rb_fde_t * plainF, uint32_t id)
 {
 	rb_fde_t *F[2];
 	ssl_ctl_t *ctl;
@@ -671,7 +718,7 @@ start_ssld_connect(rb_fde_t * sslF, rb_fde_t * plainF, int32_t id)
 	F[1] = plainF;
 
 	buf[0] = 'C';
-	int32_to_buf(&buf[1], id);
+	uint32_to_buf(&buf[1], id);
 
 	ctl = which_ssld();
 	ctl->cli_count++;
@@ -715,7 +762,7 @@ start_zlib_session(void *data)
 	char buf2[9];
 	void *recvq_start;
 
-	size_t hdr = (sizeof(uint8_t) * 2) + sizeof(int32_t);
+	size_t hdr = (sizeof(uint8_t) * 2) + sizeof(uint32_t);
 	size_t len;
 	int cpylen, left;
 
@@ -738,7 +785,7 @@ start_zlib_session(void *data)
 	buf = rb_malloc(len);
 	level = ConfigFileEntry.compression_level;
 
-	int32_to_buf(&buf[1], rb_get_fd(server->localClient->F));
+	uint32_to_buf(&buf[1], rb_get_fd(server->localClient->F));
 	buf[5] = (char) level;
 
 	recvq_start = &buf[6];
@@ -769,19 +816,19 @@ start_zlib_session(void *data)
 	{
 		/* tell ssld the new connid for the ssl part*/
 		buf2[0] = 'Y';
-		int32_to_buf(&buf2[1], rb_get_fd(server->localClient->F));
-		int32_to_buf(&buf2[5], rb_get_fd(xF2));
+		uint32_to_buf(&buf2[1], rb_get_fd(server->localClient->F));
+		uint32_to_buf(&buf2[5], rb_get_fd(xF2));
 		ssl_cmd_write_queue(server->localClient->ssl_ctl, NULL, 0, buf2, sizeof(buf2));
 	}
 
 
 	F[0] = server->localClient->F;
 	F[1] = xF1;
-	del_from_cli_fd_hash(server);
+	del_from_cli_connid_hash(server);
 	server->localClient->F = xF2;
 	/* need to redo as what we did before isn't valid now */
-	int32_to_buf(&buf[1], rb_get_fd(server->localClient->F));
-	add_to_cli_fd_hash(server);
+	uint32_to_buf(&buf[1], rb_get_fd(server->localClient->F));
+	add_to_cli_connid_hash(server);
 
 	server->localClient->z_ctl = which_ssld();
 	server->localClient->z_ctl->cli_count++;
@@ -794,13 +841,13 @@ collect_zipstats(void *unused)
 {
 	rb_dlink_node *ptr;
 	struct Client *target_p;
-	char buf[sizeof(uint8_t) + sizeof(int32_t) + HOSTLEN];
+	char buf[sizeof(uint8_t) + sizeof(uint32_t) + HOSTLEN];
 	void *odata;
 	size_t len;
-	int32_t id;
+	uint32_t id;
 
 	buf[0] = 'S';
-	odata = buf + sizeof(uint8_t) + sizeof(int32_t);
+	odata = buf + sizeof(uint8_t) + sizeof(uint32_t);
 
 	RB_DLINK_FOREACH(ptr, serv_list.head)
 	{
@@ -810,7 +857,7 @@ collect_zipstats(void *unused)
 			len = sizeof(uint8_t) + sizeof(uint32_t);
 
 			id = rb_get_fd(target_p->localClient->F);
-			int32_to_buf(&buf[1], id);
+			uint32_to_buf(&buf[1], id);
 			rb_strlcpy(odata, target_p->name, (sizeof(buf) - len));
 			len += strlen(odata) + 1;	/* Get the \0 as well */
 			ssl_cmd_write_queue(target_p->localClient->z_ctl, NULL, 0, buf, len);
@@ -843,5 +890,5 @@ void
 init_ssld(void)
 {
 	rb_event_addish("collect_zipstats", collect_zipstats, NULL, ZIPSTATS_TIME);
-	rb_event_addish("cleanup_dead_ssld", cleanup_dead_ssl, NULL, 1200);
+	rb_event_addish("cleanup_dead_ssld", cleanup_dead_ssl, NULL, 60);
 }

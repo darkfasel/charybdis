@@ -26,7 +26,7 @@
 
 #include <libratbox_config.h>
 #include <ratbox_lib.h>
-#if !defined(HAVE_OPENSSL) && !defined(HAVE_GNUTLS)
+#if !defined(HAVE_OPENSSL) && !defined(HAVE_GNUTLS) && !defined(HAVE_MBEDTLS)
 
 #include "arc4random.h"
 
@@ -94,7 +94,7 @@ rb_get_ssl_strerror(rb_fde_t *F)
 }
 
 int
-rb_get_ssl_certfp(rb_fde_t *F, uint8_t certfp[RB_SSL_CERTFP_LEN])
+rb_get_ssl_certfp(rb_fde_t *F, uint8_t certfp[RB_SSL_CERTFP_LEN], int method)
 {
 	return 0;
 }
@@ -166,6 +166,20 @@ void
 rb_get_ssl_info(char *buf, size_t len)
 {
         rb_snprintf(buf, len, "Not compiled with SSL support");
+}
+
+int
+rb_ssl_get_certfp(rb_fde_t *F, uint8_t certfp[RB_SSL_CERTFP_LEN])
+{
+	errno = ENOSYS;
+	return -1;
+}
+
+const char *
+rb_ssl_get_cipher(rb_fde_t *F)
+{
+	errno = ENOSYS;
+	return NULL;
 }
 
 #endif /* !HAVE_OPENSSL */

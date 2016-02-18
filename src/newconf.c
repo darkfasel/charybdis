@@ -29,6 +29,7 @@
 #include "blacklist.h"
 #include "sslproc.h"
 #include "privilege.h"
+#include "chmode.h"
 
 #define CF_TYPE(x) ((x) & CF_MTYPE)
 
@@ -865,9 +866,9 @@ conf_set_listen_port_both(void *data, int ssl)
 		}
                 if(listener_address == NULL)
                 {
-			add_listener(args->v.number, listener_address, AF_INET, ssl, yy_defer_accept);
+			add_listener(args->v.number, listener_address, AF_INET, ssl, ssl || yy_defer_accept);
 #ifdef RB_IPV6
-			add_listener(args->v.number, listener_address, AF_INET6, ssl, yy_defer_accept);
+			add_listener(args->v.number, listener_address, AF_INET6, ssl, ssl || yy_defer_accept);
 #endif
                 }
 		else
@@ -880,7 +881,7 @@ conf_set_listen_port_both(void *data, int ssl)
 #endif
 				family = AF_INET;
 
-			add_listener(args->v.number, listener_address, family, ssl, yy_defer_accept);
+			add_listener(args->v.number, listener_address, family, ssl, ssl || yy_defer_accept);
 
                 }
 
@@ -1645,6 +1646,24 @@ conf_set_general_oper_umodes(void *data)
 }
 
 static void
+conf_set_general_certfp_method(void *data)
+{
+	char *method = data;
+
+	if (!strcasecmp(method, "sha1"))
+		ConfigFileEntry.certfp_method = RB_SSL_CERTFP_METH_SHA1;
+	else if (!strcasecmp(method, "sha256"))
+		ConfigFileEntry.certfp_method = RB_SSL_CERTFP_METH_SHA256;
+	else if (!strcasecmp(method, "sha512"))
+		ConfigFileEntry.certfp_method = RB_SSL_CERTFP_METH_SHA512;
+	else
+	{
+		ConfigFileEntry.certfp_method = RB_SSL_CERTFP_METH_SHA1;
+		conf_report_error("Ignoring general::certfp_method -- bogus certfp method %s", method);
+	}
+}
+
+static void
 conf_set_general_oper_only_umodes(void *data)
 {
 	set_modes_from_table(&ConfigFileEntry.oper_only_umodes, "umode", umode_table, data);
@@ -1777,6 +1796,42 @@ conf_set_alias_target(void *data)
 		return;
 
 	yy_alias->target = rb_strdup(data);
+}
+
+static void
+conf_set_channel_autochanmodes(void *data)
+{
+	char *pm;
+	int what = MODE_ADD;
+
+	ConfigChannel.autochanmodes = 0;
+	for (pm = (char *) data; *pm; pm++)
+	{
+		switch (*pm)
+		{
+		case '+':
+			what = MODE_ADD;
+			break;
+		case '-':
+			what = MODE_DEL;
+			break;
+
+		default:
+			if (chmode_table[(unsigned char) *pm].set_func == chm_simple)
+			{
+				if (what == MODE_ADD)
+					ConfigChannel.autochanmodes |= chmode_table[(unsigned char) *pm].mode_type;
+				else
+					ConfigChannel.autochanmodes &= ~chmode_table[(unsigned char) *pm].mode_type;
+			}
+			else
+			{
+				conf_report_error("channel::autochanmodes -- Invalid channel mode %c", *pm);
+				continue;
+			}
+			break;
+		}
+	}
 }
 
 /* XXX for below */
@@ -2197,7 +2252,7 @@ static struct ConfEntry conf_serverinfo_table[] =
 	{ "ssl_ca_cert",        CF_QSTRING, NULL, 0, &ServerInfo.ssl_ca_cert },
 	{ "ssl_cert",           CF_QSTRING, NULL, 0, &ServerInfo.ssl_cert },
 	{ "ssl_dh_params",      CF_QSTRING, NULL, 0, &ServerInfo.ssl_dh_params },
-	{ "ssl_cipher_list",    CF_QSTRING, NULL, 0, &ServerInfo.ssl_cipher_list },
+	{ "ssl_cipher_list",	CF_QSTRING, NULL, 0, &ServerInfo.ssl_cipher_list },
 	{ "ssld_count",		CF_INT,	    NULL, 0, &ServerInfo.ssld_count },
 
 	{ "default_max_clients",CF_INT,     NULL, 0, &ServerInfo.default_max_clients },
@@ -2378,6 +2433,7 @@ static struct ConfEntry conf_general_table[] =
 	{ "client_flood_message_time",	CF_INT,   NULL, 0, &ConfigFileEntry.client_flood_message_time	},
 	{ "max_ratelimit_tokens",	CF_INT,   NULL, 0, &ConfigFileEntry.max_ratelimit_tokens	},
 	{ "away_interval",		CF_INT,   NULL, 0, &ConfigFileEntry.away_interval		},
+	{ "certfp_method",	CF_STRING, conf_set_general_certfp_method, 0, NULL },
 	{ "\0", 		0, 	  NULL, 0, NULL }
 };
 
@@ -2402,6 +2458,8 @@ static struct ConfEntry conf_channel_table[] =
 	{ "resv_forcepart",     CF_YESNO, NULL, 0, &ConfigChannel.resv_forcepart	},
 	{ "channel_target_change", CF_YESNO, NULL, 0, &ConfigChannel.channel_target_change	},
 	{ "disable_local_channels", CF_YESNO, NULL, 0, &ConfigChannel.disable_local_channels },
+	{ "autochanmodes",	CF_QSTRING, conf_set_channel_autochanmodes, 0, NULL	},
+	{ "displayed_usercount",	CF_INT, NULL, 0, &ConfigChannel.displayed_usercount	},
 	{ "\0", 		0, 	  NULL, 0, NULL }
 };
 

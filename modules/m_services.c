@@ -47,6 +47,7 @@
 #include "modules.h"
 #include "whowas.h"
 #include "monitor.h"
+#include "supported.h"
 
 static int _modinit(void);
 static void _moddeinit(void);
@@ -101,12 +102,14 @@ static int
 _modinit(void)
 {
 	mark_services();
+	add_isupport("FNC", isupport_string, "");
 	return 0;
 }
 
 static void
 _moddeinit(void)
 {
+	delete_isupport("FNC");
 	unmark_services();
 }
 
@@ -134,7 +137,7 @@ me_su(struct Client *client_p, struct Client *source_p,
 	else
 		rb_strlcpy(target_p->user->suser, parv[2], sizeof(target_p->user->suser));
 
-	sendto_common_channels_local_butone(target_p, CLICAP_ACCOUNT_NOTIFY, ":%s!%s@%s ACCOUNT %s",
+	sendto_common_channels_local_butone(target_p, CLICAP_ACCOUNT_NOTIFY, NOCAPS, ":%s!%s@%s ACCOUNT %s",
 					    target_p->name, target_p->username, target_p->host,
 					    EmptyString(target_p->user->suser) ? "*" : target_p->user->suser);
 
@@ -152,27 +155,6 @@ me_login(struct Client *client_p, struct Client *source_p,
 
 	rb_strlcpy(source_p->user->suser, parv[1], sizeof(source_p->user->suser));
 	return 0;
-}
-
-static int
-clean_nick(const char *nick)
-{
-	int len = 0;
-
-	if(EmptyString(nick) || *nick == '-' || IsDigit(*nick))
-		return 0;
-
-	for(; *nick; nick++)
-	{
-		len++;
-		if(!IsNickChar(*nick))
-			return 0;
-	}
-
-	if(len >= NICKLEN)
-		return 0;
-
-	return 1;
 }
 
 static int
@@ -197,7 +179,7 @@ me_rsfnc(struct Client *client_p, struct Client *source_p,
 	if(!MyClient(target_p))
 		return 0;
 
-	if(!clean_nick(parv[2]))
+	if(!clean_nick(parv[2], 0) || IsDigit(parv[2][0]))
 		return 0;
 
 	curts = atol(parv[4]);
@@ -258,7 +240,7 @@ doit:
 			target_p->name, parv[2], target_p->username,
 			target_p->host);
 
-	sendto_common_channels_local(target_p, NOCAPS, ":%s!%s@%s NICK :%s",
+	sendto_common_channels_local(target_p, NOCAPS, NOCAPS, ":%s!%s@%s NICK :%s",
 				target_p->name, target_p->username,
 				target_p->host, parv[2]);
 

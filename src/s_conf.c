@@ -793,6 +793,9 @@ set_default_conf(void)
 	ConfigChannel.resv_forcepart = YES;
 	ConfigChannel.channel_target_change = YES;
 	ConfigChannel.disable_local_channels = NO;
+	ConfigChannel.displayed_usercount = 3;
+
+	ConfigChannel.autochanmodes = MODE_TOPICLIMIT | MODE_NOPRIVMSGS;
 
 	ConfigServerHide.flatten_links = 0;
 	ConfigServerHide.links_delay = 300;
@@ -820,6 +823,7 @@ set_default_conf(void)
 	ServerInfo.default_max_clients = MAXCONNECTIONS;
 
 	ConfigFileEntry.nicklen = NICKLEN;
+	ConfigFileEntry.certfp_method = RB_SSL_CERTFP_METH_SHA1;
 
 	if (!alias_dict)
 		alias_dict = irc_dictionary_create(strcasecmp);

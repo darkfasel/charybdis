@@ -53,6 +53,12 @@ mr_starttls(struct Client *client_p, struct Client *source_p, int parc, const ch
 	if (!MyConnect(client_p))
 		return 0;
 
+	if (IsSSL(client_p))
+	{
+		sendto_one_numeric(client_p, ERR_STARTTLS, form_str(ERR_STARTTLS), "Nested TLS handshake not allowed");
+		return 1;
+	}
+
 	if (!ssl_ok || !get_ssld_count())
 	{
 		sendto_one_numeric(client_p, ERR_STARTTLS, form_str(ERR_STARTTLS), "TLS is not configured");
@@ -77,9 +83,7 @@ mr_starttls(struct Client *client_p, struct Client *source_p, int parc, const ch
 	ctl = start_ssld_accept(client_p->localClient->F, F[1], rb_get_fd(F[0]));
 	if (ctl != NULL)
 	{
-		del_from_cli_fd_hash(client_p);
 		client_p->localClient->F = F[0];
-		add_to_cli_fd_hash(client_p);
 		client_p->localClient->ssl_ctl = ctl;
 		SetSSL(client_p);
 	}
