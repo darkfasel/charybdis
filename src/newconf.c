@@ -2363,7 +2363,7 @@ static struct ConfEntry conf_general_table[] =
 	{ "stats_i_oper_only", 	CF_STRING, conf_set_general_stats_i_oper_only,	0, NULL },
 	{ "default_umodes",	CF_QSTRING, conf_set_general_default_umodes, 0, NULL },
 
-	{ "default_darkfasel_salt", CF_QSTRING, NULL, REALLEN, &ConfigFileEntry.default_darkfasel_salt },
+	{ "anonymous_cloak",	CF_QSTRING, NULL, REALLEN, &ConfigFileEntry.anonymous_cloak },
 	{ "default_operstring",	CF_QSTRING, NULL, REALLEN,    &ConfigFileEntry.default_operstring },
 	{ "default_adminstring",CF_QSTRING, NULL, REALLEN,    &ConfigFileEntry.default_adminstring },
 	{ "servicestring",	CF_QSTRING, NULL, REALLEN,    &ConfigFileEntry.servicestring },

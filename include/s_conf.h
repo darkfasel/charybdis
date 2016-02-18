@@ -161,7 +161,7 @@ struct config_file_entry
 	char *fname_operspylog;
 	char *fname_ioerrorlog;
 
-	char *default_darkfasel_salt;
+	char *anonymous_cloak;
 
 	unsigned char compression_level;
 	int disable_fake_channels;

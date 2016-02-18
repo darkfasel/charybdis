@@ -74,59 +74,6 @@ distribute_hostchange(struct Client *client_p, char *newhost)
 }
 
 static void
-do_address_cloak(const char *inbuf, char *outbuf)
-{
-	/* sha512 */
-	char algorithm[4] = "$6$";
-
-	/* key */
-	char *key = ConfigFileEntry.default_darkfasel_salt;
-
-	char salt[64];
-	sprintf(salt, "%s%s", algorithm, key);
-
-	/* check default value */
-	if (!strcmp(key, "fnord"))
-	{
-
-		/* seed chars */
-		const char *const chars =
-			"0123456789ABCDEFGHIJKLMNOPQRSTUV"
-			"WXYZabcdefghijklmnopqrstuvwxyz/.";
-
-		/* not very random seed */
-		unsigned long seed[2];
-		seed[0] = time(NULL);
-		seed[1] = getpid() ^ (seed[0] >> 14 & 0x30000);
-
-		/* printable characters */
-		int salt_i;
-		for (salt_i = 0; salt_i < 5; salt_i++)
-			salt[3+salt_i] = chars[(seed[salt_i/5] >> (salt_i%5)*6) & 0x3f];
-	}
-
-	/* encrypt */
-	char *hash = rb_crypt(inbuf, salt);
-
-	/* replace not usable characters */
-	int replace_i;
-	for (replace_i=0; hash[replace_i]!= '\0'; replace_i++) {
-
-		if ((hash[replace_i]=='/') || (hash[replace_i]=='$')) {
-
-		hash[replace_i] = '.';
-		}
-	}
-
-	/* hide characters */
-	hash[strlen(hash)-17] = '\0';
-	hash = hash + 46;
-
-	/* beam me up */
-	rb_strlcpy(outbuf, hash, HOSTLEN + 1);
-}
-
-static void
 check_umode_change(void *vdata)
 {
 	hook_data_umode_changed *data = (hook_data_umode_changed *)vdata;
@@ -174,7 +121,8 @@ check_new_user(void *vdata)
 		return;
 	}
 	source_p->localClient->mangledhost = rb_malloc(HOSTLEN + 1);
-	do_address_cloak(source_p->orighost, source_p->localClient->mangledhost);
+	rb_strlcpy(source_p->localClient->mangledhost, source_p->certfp ? source_p->certfp : ConfigFileEntry.anonymous_cloak, HOSTLEN + 1);
+
 	if (IsDynSpoof(source_p))
 		source_p->umodes &= ~user_modes['x'];
 	if (source_p->umodes & user_modes['x'])

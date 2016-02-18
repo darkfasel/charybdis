@@ -460,13 +460,11 @@ general {
 	hide_error_messages = opers;
 	hide_spoof_ips = yes;
 
-	/* default_darkfasel_salt: secret salt key
-	 * If ip_cloaking_darkfasel is enabled.
-	 * Default is "fnord" for pseudo randomness. Pseudo randomness is generated
-	 * by every client connect in base63+<dot>/printable characters with time,
-	 * pid and the default value.
+	/* anonymous_cloak: hostname cloak for ip_cloak_darkfasel
+	 * Clients connecting without client certificate will be
+	 * cloaked with this string by ip_cloak_darkfasel
 	 */
-	default_darkfasel_salt = "fnord";
+	anonymous_cloak = "users.darkfasel.net";
 
 	/*
 	 * default_umodes: umodes to enable on connect.
