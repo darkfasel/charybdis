@@ -62,7 +62,7 @@ char *current_file = conffilebuf;
 
 FILE *inc_fbfile_in[MAX_INCLUDE_DEPTH];
 
-char linebuf[512];
+char yy_linebuf[16384];
 
 #undef YY_INPUT
 
@@ -83,7 +83,7 @@ include   \.include{ws}(\<.*\>|\".*\")
 %%
 {include}       { cinclude(); }
 "/*"            { ccomment(); }
-\n.*            { strcpy(linebuf, yytext+1); lineno++; yyless(1); }
+\n.*            { rb_strlcpy(yy_linebuf, yytext+1, sizeof(yy_linebuf)); lineno++; yyless(1); }
 
 {ws}            ;
 {comment}       { hashcomment(); }
@@ -98,7 +98,7 @@ include   \.include{ws}(\<.*\>|\".*\")
                     }
                   else
                     {
-                      strcpy(yylval.string, yytext + 1);
+                      rb_strlcpy(yylval.string, yytext + 1, 1024);
                       if(yylval.string[yyleng-2] != '"')
                         ilog(L_MAIN, "Unterminated character string");
                       else
@@ -138,7 +138,7 @@ include   \.include{ws}(\<.*\>|\".*\")
 
 loadmodule	{ return LOADMODULE; }
 {string}        { 
-		  strcpy(yylval.string, yytext);
+		  rb_strlcpy(yylval.string, yytext, 1024);
                   yylval.string[yyleng] = '\0';
                   return STRING;
                 }

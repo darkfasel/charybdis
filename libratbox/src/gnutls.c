@@ -31,14 +31,15 @@
 
 #include <gnutls/gnutls.h>
 #include <gnutls/x509.h>
-#include <gnutls/crypto.h>
 
-#if GNUTLS_VERSION_MAJOR < 3
+#if (GNUTLS_VERSION_MAJOR < 3)
 # include <gcrypt.h>
+#else
+# include <gnutls/crypto.h>
 #endif
 
-static gnutls_certificate_credentials x509;
-static gnutls_dh_params dh_params;
+static gnutls_certificate_credentials_t x509;
+static gnutls_dh_params_t dh_params;
 static gnutls_priority_t default_priority;
 
 /* These are all used for getting GnuTLS to supply a client cert. */
@@ -162,7 +163,7 @@ rb_ssl_start_accepted(rb_fde_t *new_F, ACCB * cb, void *data, int timeout)
 	gnutls_dh_set_prime_bits(*ssl, 1024);
 	gnutls_transport_set_ptr(*ssl, (gnutls_transport_ptr_t) (long int)new_F->fd);
 	gnutls_certificate_server_set_request(*ssl, GNUTLS_CERT_REQUEST);
-	gnutls_priority_set(SSL_P(F), default_priority);
+	gnutls_priority_set(*ssl, default_priority);
 
 	if(do_ssl_handshake(new_F, rb_ssl_tryaccept, NULL))
 	{
@@ -256,13 +257,13 @@ rb_ssl_write(rb_fde_t *F, const void *buf, size_t count)
 	return rb_ssl_read_or_write(1, F, NULL, buf, count);
 }
 
+#if (GNUTLS_VERSION_MAJOR < 3)
 static void
 rb_gcry_random_seed(void *unused)
 {
-#if GNUTLS_VERSION_MAJOR < 3
 	gcry_fast_random_poll();
-#endif
 }
+#endif
 
 int
 rb_init_ssl(void)
@@ -281,7 +282,10 @@ rb_init_ssl(void)
 	gnutls_certificate_set_retrieve_function(x509, cert_callback);
 #endif
 
+#if (GNUTLS_VERSION_MAJOR < 3)
 	rb_event_addish("rb_gcry_random_seed", rb_gcry_random_seed, NULL, 300);
+#endif
+
 	return 1;
 }
 
@@ -303,10 +307,16 @@ cert_callback(gnutls_session_t session, const gnutls_datum_t *req_ca_rdn, int nr
 #endif
 {
 	/* XXX - ugly hack. Tell GnuTLS to use the first (only) certificate we have for auth. */
+#if (GNUTLS_VERSION_MAJOR < 3)
 	st->type = GNUTLS_CRT_X509;
+#else
+	st->cert_type = GNUTLS_CRT_X509;
+	st->key_type = GNUTLS_PRIVKEY_X509;
+#endif
 	st->ncerts = x509_cert_count;
 	st->cert.x509 = x509_cert;
 	st->key.x509 = x509_key;
+	st->deinit_all = 0;
 
 	return 0;
 }
@@ -563,8 +573,6 @@ rb_init_prng(const char *path, prng_seed_t seed_type)
 {
 #if GNUTLS_VERSION_MAJOR < 3
 	gcry_fast_random_poll();
-#else
-	gnutls_rnd_refresh();
 #endif
 	return 1;
 }
@@ -591,60 +599,51 @@ rb_get_ssl_certfp(rb_fde_t *F, uint8_t certfp[RB_SSL_CERTFP_LEN], int method)
 {
 	gnutls_x509_crt_t cert;
 	gnutls_digest_algorithm_t algo;
-	unsigned int cert_list_size;
+	unsigned int cert_list_size = 0;
 	const gnutls_datum_t *cert_list;
-	uint8_t digest[RB_SSL_CERTFP_LEN * 2];
 	size_t digest_size;
-	int len;
-
-	if (gnutls_certificate_type_get(SSL_P(F)) != GNUTLS_CRT_X509)
-		return 0;
-
-	if (gnutls_x509_crt_init(&cert) < 0)
-		return 0;
-
-	cert_list_size = 0;
-	cert_list = gnutls_certificate_get_peers(SSL_P(F), &cert_list_size);
-	if (cert_list == NULL)
-	{
-		gnutls_x509_crt_deinit(cert);
-		return 0;
-	}
-
-	if (gnutls_x509_crt_import(cert, &cert_list[0], GNUTLS_X509_FMT_DER) < 0)
-	{
-		gnutls_x509_crt_deinit(cert);
-		return 0;
-	}
 
 	switch(method)
 	{
 	case RB_SSL_CERTFP_METH_SHA1:
 		algo = GNUTLS_DIG_SHA1;
-		len = RB_SSL_CERTFP_LEN_SHA1;
 		break;
 	case RB_SSL_CERTFP_METH_SHA256:
 		algo = GNUTLS_DIG_SHA256;
-		len = RB_SSL_CERTFP_LEN_SHA256;
 		break;
 	case RB_SSL_CERTFP_METH_SHA512:
 		algo = GNUTLS_DIG_SHA512;
-		len = RB_SSL_CERTFP_LEN_SHA512;
 		break;
 	default:
 		return 0;
 	}
 
-	if (gnutls_x509_crt_get_fingerprint(cert, algo, digest, &digest_size) < 0)
+	if (gnutls_certificate_type_get(SSL_P(F)) != GNUTLS_CRT_X509)
+		return 0;
+
+	cert_list = gnutls_certificate_get_peers(SSL_P(F), &cert_list_size);
+
+	if (cert_list_size <= 0)
+		return 0;
+
+	if (gnutls_x509_crt_init(&cert) != GNUTLS_E_SUCCESS)
+		return 0;
+
+	if (gnutls_x509_crt_import(cert, &cert_list[0], GNUTLS_X509_FMT_DER) != GNUTLS_E_SUCCESS)
 	{
 		gnutls_x509_crt_deinit(cert);
 		return 0;
 	}
 
-	memcpy(certfp, digest, len);
+	if (gnutls_x509_crt_get_fingerprint(cert, algo, certfp, &digest_size) != 0)
+	{
+		gnutls_x509_crt_deinit(cert);
+		return 0;
+	}
 
 	gnutls_x509_crt_deinit(cert);
-	return len;
+
+	return (int) digest_size;
 }
 
 int
@@ -656,7 +655,7 @@ rb_supports_ssl(void)
 void
 rb_get_ssl_info(char *buf, size_t len)
 {
-	rb_snprintf(buf, len, "GNUTLS: compiled (%s), library(%s)",
+	rb_snprintf(buf, len, "GNUTLS: compiled (%s), library (%s)",
 		    LIBGNUTLS_VERSION, gnutls_check_version(NULL));
 }
 
@@ -665,11 +664,26 @@ rb_ssl_get_cipher(rb_fde_t *F)
 {
 	static char buf[1024];
 
-	rb_snprintf(buf, sizeof(buf), "%s-%s-%s-%s",
-		gnutls_protocol_get_name(gnutls_protocol_get_version(SSL_P(F))),
-		gnutls_kx_get_name(gnutls_kx_get(SSL_P(F))),
-		gnutls_cipher_get_name(gnutls_cipher_get(SSL_P(F))),
-		gnutls_mac_get_name(gnutls_mac_get(SSL_P(F))));
+	const char* proto_name =
+	    gnutls_protocol_get_name(gnutls_protocol_get_version(SSL_P(F)));
+
+	const char* kex_alg_name =
+	    gnutls_kx_get_name(gnutls_kx_get(SSL_P(F)));
+
+	const char* cipher_alg_name =
+	    gnutls_cipher_get_name(gnutls_cipher_get(SSL_P(F)));
+
+	const char* mac_alg_name =
+	    gnutls_mac_get_name(gnutls_mac_get(SSL_P(F)));
+
+	(void) rb_snprintf(buf, sizeof buf, "%s%s%s%s%s%s%s",
+	                   proto_name ? proto_name : "",
+	                   proto_name ? ", " : "",
+	                   kex_alg_name ? kex_alg_name : "",
+	                   kex_alg_name ? "-" : "",
+	                   cipher_alg_name ? cipher_alg_name : "",
+	                   cipher_alg_name ? "-" : "",
+	                   mac_alg_name ? mac_alg_name : "");
 
 	return buf;
 }

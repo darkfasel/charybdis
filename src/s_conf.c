@@ -58,7 +58,7 @@
 struct config_server_hide ConfigServerHide;
 
 extern int yyparse(void);		/* defined in y.tab.c */
-extern char linebuf[];
+extern char yy_linebuf[16384];		/* defined in ircd_lexer.l */
 
 #ifndef INADDR_NONE
 #define INADDR_NONE ((unsigned int) 0xffffffff)
@@ -875,9 +875,9 @@ validate_conf(void)
 	if(!rb_setup_ssl_server(ServerInfo.ssl_cert, ServerInfo.ssl_private_key, ServerInfo.ssl_dh_params, ServerInfo.ssl_cipher_list))
 	{
 		ilog(L_MAIN, "WARNING: Unable to setup SSL.");
-		ssl_ok = 0;
+		ircd_ssl_ok = 0;
 	} else {
-		ssl_ok = 1;
+		ircd_ssl_ok = 1;
 		send_new_ssl_certs(ServerInfo.ssl_cert, ServerInfo.ssl_private_key, ServerInfo.ssl_dh_params, ServerInfo.ssl_cipher_list);
 	}
 
@@ -1648,7 +1648,7 @@ yyerror(const char *msg)
 {
 	char newlinebuf[BUFSIZE];
 
-	strip_tabs(newlinebuf, linebuf, strlen(linebuf));
+	strip_tabs(newlinebuf, yy_linebuf, strlen(yy_linebuf));
 
 	ierror("\"%s\", line %d: %s at '%s'", conffilebuf, lineno + 1, msg, newlinebuf);
 	sendto_realops_snomask(SNO_GENERAL, L_ALL, "\"%s\", line %d: %s at '%s'",

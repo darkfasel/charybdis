@@ -24,7 +24,6 @@
 #include <ratbox_lib.h>
 #include "stdinc.h"
 
-
 #include "s_conf.h"
 #include "logger.h"
 #include "listener.h"
@@ -37,6 +36,8 @@
 #include "packet.h"
 
 #define ZIPSTATS_TIME           60
+#define MAXPASSFD               4
+#define READSIZE                1024
 
 static void collect_zipstats(void *unused);
 static void ssl_read_ctl(rb_fde_t * F, void *data);
@@ -45,8 +46,6 @@ static int ssld_count;
 static char tmpbuf[READBUF_SIZE];
 static char nul = '\0';
 
-#define MAXPASSFD 4
-#define READSIZE 1024
 typedef struct _ssl_ctl_buf
 {
 	rb_dlink_node node;
@@ -55,7 +54,6 @@ typedef struct _ssl_ctl_buf
 	rb_fde_t *F[MAXPASSFD];
 	int nfds;
 } ssl_ctl_buf_t;
-
 
 struct _ssl_ctl
 {
@@ -74,7 +72,6 @@ static void send_new_ssl_certs_one(ssl_ctl_t * ctl, const char *ssl_cert,
 				   const char *ssl_cipher_list);
 static void send_init_prng(ssl_ctl_t * ctl, prng_seed_t seedtype, const char *path);
 static void send_certfp_method(ssl_ctl_t *ctl, int method);
-
 
 static rb_dlink_list ssl_daemons;
 
@@ -148,7 +145,6 @@ static char *ssld_path;
 static int ssld_spin_count = 0;
 static time_t last_spin;
 static int ssld_wait = 0;
-
 
 static void
 ssl_killall(void)
@@ -307,15 +303,13 @@ start_ssldaemon(int count, const char *ssl_cert, const char *ssl_private_key, co
 		rb_close(F2);
 		rb_close(P1);
 		ctl = allocate_ssl_daemon(F1, P2, pid);
-		if(ssl_ok)
+		if(ircd_ssl_ok)
 		{
 			send_init_prng(ctl, RB_PRNG_DEFAULT, NULL);
 			send_certfp_method(ctl, ConfigFileEntry.certfp_method);
 
-			if(ssl_cert != NULL && ssl_private_key != NULL)
-				send_new_ssl_certs_one(ctl, ssl_cert, ssl_private_key,
-						       ssl_dh_params != NULL ? ssl_dh_params : "",
-						       ssl_cipher_list != NULL ? ssl_cipher_list : "");
+			if(ssl_cert != NULL)
+				send_new_ssl_certs_one(ctl, ssl_cert, ssl_private_key, ssl_dh_params, ssl_cipher_list);
 		}
 		ssl_read_ctl(ctl->F, ctl);
 		ssl_do_pipe(P2, ctl);
@@ -386,7 +380,6 @@ ssl_process_dead_fd(ssl_ctl_t * ctl, ssl_ctl_buf_t * ctl_buf)
 	exit_client(client_p, client_p, &me, reason);
 }
 
-
 static void
 ssl_process_cipher_string(ssl_ctl_t *ctl, ssl_ctl_buf_t *ctl_buf)
 {
@@ -411,7 +404,6 @@ ssl_process_cipher_string(ssl_ctl_t *ctl, ssl_ctl_buf_t *ctl_buf)
 	}
 }
 
-
 static void
 ssl_process_certfp(ssl_ctl_t * ctl, ssl_ctl_buf_t * ctl_buf)
 {
@@ -422,7 +414,7 @@ ssl_process_certfp(ssl_ctl_t * ctl, ssl_ctl_buf_t * ctl_buf)
 	char *certfp_string;
 	int i;
 
-	if(ctl_buf->buflen > 5 + RB_SSL_CERTFP_LEN)
+	if(ctl_buf->buflen > 9 + RB_SSL_CERTFP_LEN)
 		return;		/* bogus message..drop it.. XXX should warn here */
 
 	fd = buf_to_uint32(&ctl_buf->buf[1]);
@@ -454,7 +446,7 @@ ssl_process_cmd_recv(ssl_ctl_t * ctl)
 		switch (*ctl_buf->buf)
 		{
 		case 'N':
-			ssl_ok = 0;	/* ssld says it can't do ssl/tls */
+			ircd_ssl_ok = 0;	/* ssld says it can't do ssl/tls */
 			break;
 		case 'D':
 			ssl_process_dead_fd(ctl, ctl_buf);
@@ -469,19 +461,19 @@ ssl_process_cmd_recv(ssl_ctl_t * ctl)
 			ssl_process_zipstats(ctl, ctl_buf);
 			break;
 		case 'I':
-			ssl_ok = 0;
+			ircd_ssl_ok = 0;
 			ilog(L_MAIN, "%s", cannot_setup_ssl);
 			sendto_realops_snomask(SNO_GENERAL, L_ALL, "%s", cannot_setup_ssl);
 			break;
 		case 'U':
-			zlib_ok = 0;
-			ssl_ok = 0;
+			ircd_zlib_ok = 0;
+			ircd_ssl_ok = 0;
 			ilog(L_MAIN, "%s", no_ssl_or_zlib);
 			sendto_realops_snomask(SNO_GENERAL, L_ALL, "%s", no_ssl_or_zlib);
 			ssl_killall();
 			break;
 		case 'z':
-			zlib_ok = 0;
+			ircd_zlib_ok = 0;
 			break;
 		default:
 			ilog(L_MAIN, "Received invalid command from ssld: %s", ctl_buf->buf);
@@ -494,7 +486,6 @@ ssl_process_cmd_recv(ssl_ctl_t * ctl)
 	}
 
 }
-
 
 static void
 ssl_read_ctl(rb_fde_t * F, void *data)
@@ -613,11 +604,20 @@ ssl_cmd_write_queue(ssl_ctl_t * ctl, rb_fde_t ** F, int count, const void *buf, 
 	ssl_write_ctl(ctl->F, ctl);
 }
 
-
 static void
-send_new_ssl_certs_one(ssl_ctl_t * ctl, const char *ssl_cert, const char *ssl_private_key, const char *ssl_dh_params, const char *ssl_cipher_list)
+send_new_ssl_certs_one(ssl_ctl_t * ctl, const char *ssl_cert, const char *ssl_private_key,
+                       const char *ssl_dh_params, const char *ssl_cipher_list)
 {
 	size_t len;
+
+	if (ssl_private_key == NULL)
+		ssl_private_key = ssl_cert;
+
+	if (ssl_dh_params == NULL)
+		ssl_dh_params = "";
+
+	if (ssl_cipher_list == NULL)
+		ssl_cipher_list = "";
 
 	len = strlen(ssl_cert) + strlen(ssl_private_key) + strlen(ssl_dh_params) + strlen(ssl_cipher_list) + 6;
 	if(len > sizeof(tmpbuf))
@@ -630,9 +630,8 @@ send_new_ssl_certs_one(ssl_ctl_t * ctl, const char *ssl_cert, const char *ssl_pr
 		     len, sizeof(tmpbuf));
 		return;
 	}
-	len = rb_snprintf(tmpbuf, sizeof(tmpbuf), "K%c%s%c%s%c%s%c%s%c", nul, ssl_cert, nul,
-			  ssl_private_key, nul, ssl_dh_params, nul,
-			  ssl_cipher_list != NULL ? ssl_cipher_list : "", nul);
+	len = rb_snprintf(tmpbuf, sizeof(tmpbuf), "K%c%s%c%s%c%s%c%s%c", nul, ssl_cert,
+	                  nul, ssl_private_key, nul, ssl_dh_params, nul, ssl_cipher_list, nul);
 	ssl_cmd_write_queue(ctl, NULL, 0, tmpbuf, len);
 }
 
@@ -678,9 +677,9 @@ void
 send_new_ssl_certs(const char *ssl_cert, const char *ssl_private_key, const char *ssl_dh_params, const char *ssl_cipher_list)
 {
 	rb_dlink_node *ptr;
-	if(ssl_cert == NULL || ssl_private_key == NULL || ssl_dh_params == NULL)
+	if(ssl_cert == NULL)
 	{
-		ssl_ok = 0;
+		ircd_ssl_ok = 0;
 		return;
 	}
 	RB_DLINK_FOREACH(ptr, ssl_daemons.head)
@@ -689,7 +688,6 @@ send_new_ssl_certs(const char *ssl_cert, const char *ssl_private_key, const char
 		send_new_ssl_certs_one(ctl, ssl_cert, ssl_private_key, ssl_dh_params, ssl_cipher_list);
 	}
 }
-
 
 ssl_ctl_t *
 start_ssld_accept(rb_fde_t * sslF, rb_fde_t * plainF, uint32_t id)
@@ -759,7 +757,6 @@ start_zlib_session(void *data)
 	rb_fde_t *F[2];
 	rb_fde_t *xF1, *xF2;
 	char *buf;
-	char buf2[9];
 	void *recvq_start;
 
 	size_t hdr = (sizeof(uint8_t) * 2) + sizeof(uint32_t);
@@ -785,7 +782,7 @@ start_zlib_session(void *data)
 	buf = rb_malloc(len);
 	level = ConfigFileEntry.compression_level;
 
-	uint32_to_buf(&buf[1], rb_get_fd(server->localClient->F));
+	uint32_to_buf(&buf[1], server->localClient->zconnid);
 	buf[5] = (char) level;
 
 	recvq_start = &buf[6];
@@ -812,23 +809,9 @@ start_zlib_session(void *data)
 		return;
 	}
 
-	if(IsSSL(server))
-	{
-		/* tell ssld the new connid for the ssl part*/
-		buf2[0] = 'Y';
-		uint32_to_buf(&buf2[1], rb_get_fd(server->localClient->F));
-		uint32_to_buf(&buf2[5], rb_get_fd(xF2));
-		ssl_cmd_write_queue(server->localClient->ssl_ctl, NULL, 0, buf2, sizeof(buf2));
-	}
-
-
 	F[0] = server->localClient->F;
 	F[1] = xF1;
-	del_from_cli_connid_hash(server);
 	server->localClient->F = xF2;
-	/* need to redo as what we did before isn't valid now */
-	uint32_to_buf(&buf[1], rb_get_fd(server->localClient->F));
-	add_to_cli_connid_hash(server);
 
 	server->localClient->z_ctl = which_ssld();
 	server->localClient->z_ctl->cli_count++;
