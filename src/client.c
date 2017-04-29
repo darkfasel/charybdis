@@ -256,14 +256,18 @@ free_local_client(struct Client *client_p)
 	if(IsSSL(client_p))
 	    ssld_decrement_clicount(client_p->localClient->ssl_ctl);
 
+	rb_free(client_p->localClient->cipher_string);
+
 	if(IsCapable(client_p, CAP_ZIP))
 	    ssld_decrement_clicount(client_p->localClient->z_ctl);
+
+	rb_free(client_p->localClient->zipstats);
 
 	rb_bh_free(lclient_heap, client_p->localClient);
 	client_p->localClient = NULL;
 }
 
-void
+static void
 free_client(struct Client *client_p)
 {
 	s_assert(NULL != client_p);
