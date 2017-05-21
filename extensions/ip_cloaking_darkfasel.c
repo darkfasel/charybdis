@@ -1,8 +1,8 @@
 /*
  * Charybdis: an advanced ircd
- * ip_cloaking_darkfasel.c: provide user hostname sha512 cloaking
+ * ip_cloaking_darkfasel.c: Certificate based host mangling (umode +x)
  *
- * Written originally by nenolod and Elisabeth, altered to use for darkfasel by argv in 2015
+ * Written originally by nenolod, Elisabeth, argv, altered by jomat in 2015
  * 
  */
 
@@ -46,7 +46,7 @@ mapi_hfn_list_av1 ip_cloaking_darkfasel_hfnlist[] = {
 };
 
 DECLARE_MODULE_AV1(ip_cloaking_darkfasel, _modinit, _moddeinit, NULL, NULL,
-			ip_cloaking_darkfasel_hfnlist, "$Revision: 0043 $");
+			ip_cloaking_darkfasel_hfnlist, "$Revision: 0044 $");
 
 static void
 distribute_hostchange(struct Client *client_p, char *newhost)
