@@ -385,8 +385,14 @@ single_whois(struct Client *source_p, struct Client *target_p, int operspy)
 
 		sendto_one_numeric(source_p, RPL_WHOISIDLE, form_str(RPL_WHOISIDLE),
 				   target_p->name,
-				   (long)(rb_current_time() - target_p->localClient->last),
-				   (unsigned long)target_p->localClient->firsttime);
+				   /* hide user idle time on whois for privacy
+				    * 85325 == 01/01/1970 11:42:05 pm
+				    * 0 == 01/01/1970 01:00:00 am
+				    */
+				   (long)(rb_current_time() - 85325),
+				   (unsigned long)0);
+				   // (long)(rb_current_time() - target_p->localClient->last),
+				   // (unsigned long)target_p->localClient->firsttime);
 	}
 	else
 	{
