@@ -79,14 +79,6 @@ mr_webirc(struct Client *client_p, struct Client *source_p, int parc, const char
 	const char *encr;
 	struct rb_sockaddr_storage addr;
 
-	if ((!strchr(parv[4], '.') && !strchr(parv[4], ':')) ||
-			strlen(parv[4]) + (*parv[4] == ':') >=
-			sizeof(source_p->sockhost))
-	{
-		sendto_one(source_p, "NOTICE * :Invalid IP");
-		return 0;
-	}
-
 	aconf = find_address_conf(client_p->host, client_p->sockhost,
 				IsGotId(client_p) ? client_p->username : "webirc",
 				IsGotId(client_p) ? client_p->username : "webirc",
@@ -125,22 +117,14 @@ mr_webirc(struct Client *client_p, struct Client *source_p, int parc, const char
 		return 0;
 	}
 
-	if (*parv[4] == ':')
-	{
-		source_p->sockhost[0] = '0';
-		rb_strlcpy(source_p->sockhost + 1, parv[4],
-				sizeof(source_p->sockhost) - 1);
-	}
-	else
-		rb_strlcpy(source_p->sockhost, parv[4],
-				sizeof(source_p->sockhost));
+	source_p->localClient->ip = addr;
+
+	rb_inet_ntop_sock((struct sockaddr *)&source_p->localClient->ip, source_p->sockhost, sizeof(source_p->sockhost));
 
 	if(strlen(parv[3]) <= HOSTLEN)
 		rb_strlcpy(source_p->host, parv[3], sizeof(source_p->host));
 	else
 		rb_strlcpy(source_p->host, source_p->sockhost, sizeof(source_p->host));
-
-	source_p->localClient->ip = addr;
 
 	/* Check dlines now, klines will be checked on registration */
 	if((aconf = find_dline((struct sockaddr *)&source_p->localClient->ip,

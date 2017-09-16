@@ -46,16 +46,12 @@ rb_crypt(const char *key, const char *salt)
 		{
 		case '1':
 			return rb_md5_crypt(key, salt);
-			break;
 		case '5':
 			return rb_sha256_crypt(key, salt);
-			break;
 		case '6':
 			return rb_sha512_crypt(key, salt);
-			break;
 		default:
 			return NULL;
-			break;
 		};
 	}
 	else
@@ -536,7 +532,7 @@ rb_do_des(uint32_t l_in, uint32_t r_in, uint32_t *l_out, uint32_t *r_out, int co
 	 *      l_in, r_in, l_out, and r_out are in pseudo-"big-endian" format.
 	 */
 	uint32_t l, r, *kl, *kr, *kl1, *kr1;
-	uint32_t f, r48l, r48r;
+	uint32_t f = 0, r48l, r48r;
 	int round;
 
 	if(count == 0)
@@ -1951,6 +1947,9 @@ static void *rb_sha512_finish_ctx(struct sha512_ctx *ctx, void *resbuf)
 	return resbuf;
 }
 
+#ifndef _STRING_ARCH_unaligned
+#define _STRING_ARCH_unaligned 0
+#endif
 
 static void rb_sha512_process_bytes(const void *buffer, size_t len, struct sha512_ctx *ctx)
 {
@@ -1980,7 +1979,7 @@ static void rb_sha512_process_bytes(const void *buffer, size_t len, struct sha51
 	/* Process available complete blocks.  */
 	if (len >= 128)
 	{
-	#if !_STRING_ARCH_unaligned
+	#if (!_STRING_ARCH_unaligned)
 	/* To check alignment gcc has an appropriate operator.  Other
 	   compilers don't.  */
 	#	if __GNUC__ >= 2

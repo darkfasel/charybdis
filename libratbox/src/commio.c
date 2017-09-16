@@ -336,11 +336,14 @@ rb_accept_tryaccept(rb_fde_t *F, void *data)
 {
 	struct rb_sockaddr_storage st;
 	rb_fde_t *new_F;
-	rb_socklen_t addrlen = sizeof(st);
+	rb_socklen_t addrlen;
 	int new_fd;
 
 	while(1)
 	{
+		(void) memset(&st, 0x00, sizeof st);
+		addrlen = (rb_socklen_t) sizeof st;
+
 		new_fd = accept(F->fd, (struct sockaddr *)&st, &addrlen);
 		rb_get_errno();
 		if(new_fd < 0)
@@ -742,9 +745,6 @@ mangle_mapped_sockaddr(struct sockaddr *in)
 {
 	struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)in;
 
-	if(in->sa_family == AF_INET)
-		return;
-
 	if(in->sa_family == AF_INET6 && IN6_IS_ADDR_V4MAPPED(&in6->sin6_addr))
 	{
 		struct sockaddr_in in4;
@@ -754,7 +754,6 @@ mangle_mapped_sockaddr(struct sockaddr *in)
 		in4.sin_addr.s_addr = ((uint32_t *)&in6->sin6_addr)[3];
 		memcpy(in, &in4, sizeof(struct sockaddr_in));
 	}
-	return;
 }
 #endif
 
@@ -1266,7 +1265,10 @@ inet_ntop6(const unsigned char *src, char *dst, unsigned int size)
 		if(words[i] == 0)
 		{
 			if(cur.base == -1)
-				cur.base = i, cur.len = 1;
+			{
+				cur.base = i;
+				cur.len = 1;
+			}
 			else
 				cur.len++;
 		}
@@ -1365,17 +1367,14 @@ rb_inet_ntop_sock(struct sockaddr *src, char *dst, unsigned int size)
 	{
 	case AF_INET:
 		return (rb_inet_ntop(AF_INET, &((struct sockaddr_in *)src)->sin_addr, dst, size));
-		break;
 #ifdef RB_IPV6
 	case AF_INET6:
 		return (rb_inet_ntop
 			(AF_INET6, &((struct sockaddr_in6 *)src)->sin6_addr, dst, size));
-		break;
 #endif
-	default:
-		return NULL;
-		break;
 	}
+
+	return NULL;
 }
 
 /* char *
@@ -2242,7 +2241,7 @@ rb_send_fd_buf(rb_fde_t *xF, rb_fde_t **F, int count, void *data, size_t datasiz
 	if(count > 0)
 	{
 		int len = CMSG_SPACE(sizeof(int) * count);
-		char buf[len];
+		char *buf = alloca(len);
 
 		msg.msg_control = buf;
 		msg.msg_controllen = len;
@@ -2251,13 +2250,14 @@ rb_send_fd_buf(rb_fde_t *xF, rb_fde_t **F, int count, void *data, size_t datasiz
 		cmsg->cmsg_type = SCM_RIGHTS;
 		cmsg->cmsg_len = CMSG_LEN(sizeof(int) * count);
 
-		for(unsigned int i = 0; i < count; i++)
+		for(int i = 0; i < count; i++)
 		{
 			((int *)CMSG_DATA(cmsg))[i] = rb_get_fd(F[i]);
 		}
+
 		msg.msg_controllen = cmsg->cmsg_len;
-		return sendmsg(rb_get_fd(xF), &msg, MSG_NOSIGNAL);
 	}
+
 	return sendmsg(rb_get_fd(xF), &msg, MSG_NOSIGNAL);
 }
 #else
