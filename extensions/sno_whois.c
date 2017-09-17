@@ -16,7 +16,7 @@
 #include "send.h"
 
 /* undefine this to allow anyone to receive whois notifications */
-#define OPERONLY
+//#define OPERONLY
 
 void show_whois(hook_data_client *);
 
@@ -52,8 +52,9 @@ show_whois(hook_data_client *data)
 #ifdef OPERONLY
 	   IsOper(target_p) &&
 #endif
-	   (source_p != target_p) &&
-	   (target_p->snomask & snomask_modes['W']))
+	   /* to allow without any snomask flag */
+	   (source_p != target_p))
+	   // (target_p->snomask & snomask_modes['W']))
 	{
 		sendto_one_notice(target_p,
 				":*** Notice -- %s (%s@%s) is doing a whois on you [%s]",

@@ -328,11 +328,11 @@ single_whois(struct Client *source_p, struct Client *target_p, int operspy)
 
 	if(MyClient(target_p) && !EmptyString(target_p->localClient->opername) && IsOper(target_p) && IsOper(source_p))
 	{
-		char buf[512];
-		rb_snprintf(buf, sizeof(buf), "is opered as %s, privset %s",
+		char obuf[512];
+		rb_snprintf(obuf, sizeof(obuf), "is opered as %s, privset %s",
 			    target_p->localClient->opername, target_p->localClient->privset->name);
 		sendto_one_numeric(source_p, RPL_WHOISSPECIAL, form_str(RPL_WHOISSPECIAL),
-				   target_p->name, buf);
+				   target_p->name, obuf);
 	}
 
 	if(IsSSLClient(target_p))
@@ -385,8 +385,14 @@ single_whois(struct Client *source_p, struct Client *target_p, int operspy)
 
 		sendto_one_numeric(source_p, RPL_WHOISIDLE, form_str(RPL_WHOISIDLE),
 				   target_p->name,
-				   (long)(rb_current_time() - target_p->localClient->last),
-				   (unsigned long)target_p->localClient->firsttime);
+				   /* hide user idle time on whois for privacy
+				    * 85325 == 01/01/1970 11:42:05 pm
+				    * 0 == 01/01/1970 01:00:00 am
+				    */
+				   (long)(rb_current_time() - 85325),
+				   (unsigned long)0);
+				   // (long)(rb_current_time() - target_p->localClient->last),
+				   // (unsigned long)target_p->localClient->firsttime);
 	}
 	else
 	{
